@@ -1,17 +1,37 @@
 use crate::result::{bail, Result};
 use regex::Regex;
 
-include!(concat!(env!("OUT_DIR"), "/english.rs"));
-
-type WordList = &'static [&'static str];
+static WORDS_ENGLISH: &str = include_str!("wordlists/english.txt");
 
 pub enum Language {
     English,
 }
 
-fn get_wordlist(language: Language) -> WordList {
-    match language {
-        Language::English => WORDS_ENGLISH,
+impl Language {
+    pub fn find_word(&self, user_word: &str) -> Option<usize> {
+        match self {
+            Language::English => Self::find_english_word(user_word),
+        }
+    }
+
+    fn find_english_word(user_word: &str) -> Option<usize> {
+        // BIP39: the wordlist is created in such a way that it's
+        //        enough to type the first four letters to
+        //        unambiguously identify the word
+        const MIN_CMP_LEN: usize = 4;
+        let user_word = user_word.to_ascii_lowercase();
+        for (idx, list_word) in WORDS_ENGLISH.lines().enumerate() {
+            if user_word.len() >= MIN_CMP_LEN
+                && list_word.len() >= MIN_CMP_LEN
+                && user_word[..MIN_CMP_LEN] == list_word[..MIN_CMP_LEN]
+            {
+                return Some(idx);
+            }
+            if user_word == list_word {
+                return Some(idx);
+            }
+        }
+        None
     }
 }
 
@@ -21,17 +41,18 @@ pub fn mnemonic_to_entropy(words: Vec<String>) -> Result<[u8; 32]> {
     if words.len() != 12 {
         bail!("Invalid number of seed words");
     }
-    let wordlist = get_wordlist(Language::English);
 
-    let mut bit_vec = Vec::with_capacity(words.len());
-    for word in words.iter() {
-        let idx_bits = match wordlist.iter().position(|s| *s == word.to_lowercase()) {
-            Some(idx) => format!("{:011b}", idx),
-            _ => bail!("Seed word {} not found in wordlist", word),
-        };
-        bit_vec.push(idx_bits);
-    }
-    let bits = bit_vec.join("");
+    let language = Language::English;
+
+    let bits = words
+        .iter()
+        .map(|w| {
+            language
+                .find_word(w)
+                .ok_or_else(|| anyhow::anyhow!("Seed word {} not found in wordlist", w))
+                .map(|idx| format!("{:011b}", idx))
+        })
+        .collect::<Result<String>>()?;
 
     let divider_index: usize = ((bits.len() as f64 / 33.0) * 32.0).floor() as usize;
     let (entropy_bits, checksum_bits) = bits.split_at(divider_index);
@@ -67,7 +88,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn decode_words() {
+    fn decode_full_words() {
         // The words and entryopy here were generated from the JS mobile-wallet implementation
         let words = "catch poet clog intact scare jacket throw palm illegal buyer allow figure";
         let expected_entropy = bs58::decode("3RrA1FDa6mdw5JwKbUxEbZbMcJgSyWjhNwxsbX5pSos8")
@@ -76,6 +97,33 @@ mod tests {
 
         let word_list = words.split_whitespace().map(|w| w.to_string()).collect();
         let entropy = mnemonic_to_entropy(word_list).expect("entropy");
+        assert_eq!(expected_entropy, entropy);
+    }
+
+    #[test]
+    fn decode_partial_words() {
+        // The words and entryopy here were generated from the JS mobile-wallet implementation
+        let words = "catc poet clog inta scar jack thro palm ille buye allo figu";
+        let expected_entropy = bs58::decode("3RrA1FDa6mdw5JwKbUxEbZbMcJgSyWjhNwxsbX5pSos8")
+            .into_vec()
+            .expect("decoded entropy");
+
+        let word_list = words.split_whitespace().map(|w| w.to_string()).collect();
+        let entropy = mnemonic_to_entropy(word_list).expect("entropy");
+        assert_eq!(expected_entropy, entropy);
+    }
+
+    #[test]
+    fn decode_three_letter_and_truncated() {
+        //           pond heart cage off just payment disorder picture wine gesture draw slot
+        let words = "pond heart cage off just paymen  diso     picture wine gestu   draw slot";
+        let expected_entropy = bs58::decode("CJ2e4jqyn6AYk6fvgPkqiDmE9JMh8SivLnp3GY2DKTbT")
+            .into_vec()
+            .expect("decoded entropy");
+
+        let word_list = words.split_whitespace().map(|w| w.to_string()).collect();
+        let entropy = mnemonic_to_entropy(word_list).expect("entropy");
+        println!("{:02x?}", entropy);
         assert_eq!(expected_entropy, entropy);
     }
 }
