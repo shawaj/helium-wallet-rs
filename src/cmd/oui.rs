@@ -88,7 +88,7 @@ impl Create {
             addresses: map_addresses(self.addresses.clone(), |v| v.to_vec())?,
             owner: keypair.public_key().into(),
             payer: self.payer.as_ref().map_or(vec![], |v| v.into()),
-            oui: api_client.get_last_oui()?,
+            oui: api_client.get_last_oui()? + 1,
             fee: 0,
             staking_fee: 1,
             owner_signature: vec![],
@@ -148,7 +148,7 @@ fn print_txn(
         OutputFormat::Table => {
             ptable!(
                 ["Key", "Value"],
-                ["Requested OUI", txn.oui + 1],
+                ["Requested OUI", txn.oui],
                 ["Reqeuested Subnet Size", txn.requested_subnet_size],
                 [
                     "Addresses",
@@ -161,7 +161,7 @@ fn print_txn(
         }
         OutputFormat::Json => {
             let table = json!({
-                "requested_oui": txn.oui + 1,
+                "requested_oui": txn.oui,
                 "addresses": map_addresses(txn.addresses.clone(), |v| v.to_string())?,
                 "requested_subnet_size": txn.requested_subnet_size,
                 "hash": status_json(status),
