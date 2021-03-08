@@ -148,7 +148,7 @@ fn print_txn(
         OutputFormat::Table => {
             ptable!(
                 ["Key", "Value"],
-                ["Requested OUI", txn.oui],
+                ["Requested OUI", txn.oui + 1],
                 ["Reqeuested Subnet Size", txn.requested_subnet_size],
                 [
                     "Addresses",
@@ -161,7 +161,7 @@ fn print_txn(
         }
         OutputFormat::Json => {
             let table = json!({
-                "requested_oui": txn.oui,
+                "requested_oui": txn.oui + 1,
                 "addresses": map_addresses(txn.addresses.clone(), |v| v.to_string())?,
                 "requested_subnet_size": txn.requested_subnet_size,
                 "hash": status_json(status),
