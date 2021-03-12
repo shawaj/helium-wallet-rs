@@ -41,7 +41,7 @@ pub enum Cmd {
 async fn main() {
     let cli = Cli::from_args();
     if let Err(e) = run(cli).await {
-        eprintln!("error: {}", e);
+        eprintln!("error: {:?}", e);
         process::exit(1);
     }
 }
